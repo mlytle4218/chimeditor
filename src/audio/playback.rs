@@ -38,7 +38,11 @@ pub struct PlaybackState {
     pub total_frames: u64,
     pub loading: bool,
     pub generation: u64,
+
+    pub skip_ranges: Vec<(u64, u64)>,
 }
+
+
 
 pub struct AudioEngine {
     pub state: Arc<Mutex<PlaybackState>>,
@@ -90,6 +94,7 @@ impl AudioEngine {
         )?;
 
         let state = Arc::new(Mutex::new(PlaybackState {
+            skip_ranges: Vec::new(),
 
             position: 0.0,
             playing: false,
@@ -114,120 +119,120 @@ impl AudioEngine {
 
         // Start background disk-cache reader.
 
-let worker_stop = Arc::new(
-    std::sync::atomic::AtomicBool::new(false)
-);
+        let worker_stop = Arc::new(
+            std::sync::atomic::AtomicBool::new(false)
+        );
 
-let thread_stop = Arc::clone(&worker_stop);
+        let thread_stop = Arc::clone(&worker_stop);
 
-let reader_state = Arc::clone(&state);
+        let reader_state = Arc::clone(&state);
 
-let worker = thread::spawn(move || {
+        let worker = thread::spawn(move || {
 
-    let window_frames =
-        WINDOW_SECONDS * sample_rate as u64;
+            let window_frames =
+                WINDOW_SECONDS * sample_rate as u64;
 
-    let margin_frames =
-        REFILL_SECONDS * sample_rate as u64;
+            let margin_frames =
+                REFILL_SECONDS * sample_rate as u64;
 
-    loop {
+            loop {
 
-        if thread_stop.load(
-            std::sync::atomic::Ordering::Relaxed
-        ) {
-            break;
-        }
+                if thread_stop.load(
+                    std::sync::atomic::Ordering::Relaxed
+                ) {
+                    break;
+                }
 
-        thread::sleep(Duration::from_millis(20));
+                thread::sleep(Duration::from_millis(20));
 
-        if thread_stop.load(
-            std::sync::atomic::Ordering::Relaxed
-        ) {
-            break;
-        }
+                if thread_stop.load(
+                    std::sync::atomic::Ordering::Relaxed
+                ) {
+                    break;
+                }
 
-        let request = {
+                let request = {
 
-            let mut s = reader_state.lock().unwrap();
+                    let mut s = reader_state.lock().unwrap();
 
-            if s.loading {
-                continue;
-            }
+                    if s.loading {
+                        continue;
+                    }
 
-            let position = s.position.max(0.0);
+                    let position = s.position.max(0.0);
 
-            let start = s.cache.base_frame as f64;
-            let end = s.cache.end_frame() as f64;
+                    let start = s.cache.base_frame as f64;
+                    let end = s.cache.end_frame() as f64;
 
-            let empty = s.cache.samples.is_empty();
+                    let empty = s.cache.samples.is_empty();
 
-            let outside =
-                empty || position < start || position >= end;
+                    let outside =
+                        empty || position < start || position >= end;
 
-            let near_boundary = if s.speed >= 0.0 {
-                position >= end - margin_frames as f64
-                    && end < s.total_frames as f64
-            } else {
-                position <= start + margin_frames as f64
-                    && start > 0.0
-            };
-
-            if !outside && !near_boundary {
-                continue;
-            }
-
-            let offset = if s.speed < 0.0 {
-                window_frames.saturating_sub(margin_frames)
-            } else {
-                margin_frames
-            };
-
-            let new_start = (position as u64)
-                .saturating_sub(offset)
-                .min(s.total_frames.saturating_sub(window_frames));
-
-            s.loading = true;
-
-            Some((new_start, s.generation))
-        };
-
-        if let Some((new_start, generation)) = request {
-
-            let frames = window_frames.min(
-                total_frames.saturating_sub(new_start)
-            );
-
-            let result = cache.read_window(
-                new_start,
-                frames
-            );
-
-            let mut s = reader_state.lock().unwrap();
-
-            if s.generation != generation {
-                s.loading = false;
-                continue;
-            }
-
-            match result {
-
-                Ok(samples) => {
-                    s.cache = AudioCache {
-                        samples,
-                        base_frame: new_start,
-                        channels,
+                    let near_boundary = if s.speed >= 0.0 {
+                        position >= end - margin_frames as f64
+                            && end < s.total_frames as f64
+                    } else {
+                        position <= start + margin_frames as f64
+                            && start > 0.0
                     };
-                }
 
-                Err(error) => {
-                    eprintln!("Cache read error: {}", error);
+                    if !outside && !near_boundary {
+                        continue;
+                    }
+
+                    let offset = if s.speed < 0.0 {
+                        window_frames.saturating_sub(margin_frames)
+                    } else {
+                        margin_frames
+                    };
+
+                    let new_start = (position as u64)
+                        .saturating_sub(offset)
+                        .min(s.total_frames.saturating_sub(window_frames));
+
+                    s.loading = true;
+
+                    Some((new_start, s.generation))
+                };
+
+                if let Some((new_start, generation)) = request {
+
+                    let frames = window_frames.min(
+                        total_frames.saturating_sub(new_start)
+                    );
+
+                    let result = cache.read_window(
+                        new_start,
+                        frames
+                    );
+
+                    let mut s = reader_state.lock().unwrap();
+
+                    if s.generation != generation {
+                        s.loading = false;
+                        continue;
+                    }
+
+                    match result {
+
+                        Ok(samples) => {
+                            s.cache = AudioCache {
+                                samples,
+                                base_frame: new_start,
+                                channels,
+                            };
+                        }
+
+                        Err(error) => {
+                            eprintln!("Cache read error: {}", error);
+                        }
+                    }
+
+                    s.loading = false;
                 }
             }
-
-            s.loading = false;
-        }
-    }
-});
+        });
 
 
         let stream = create_audio_stream(
@@ -311,6 +316,35 @@ let worker = thread::spawn(move || {
         let s = self.state.lock().unwrap();
 
         s.total_frames as f64 / self.sample_rate as f64
+    }
+
+    pub fn set_skip_ranges(
+        &self,
+        ranges: &[(f64, f64)],
+    ) {
+        let mut s = self.state.lock().unwrap();
+
+        let mut converted = Vec::new();
+
+        for &(start, end) in ranges {
+
+            let start_frame =
+                (start * self.sample_rate as f64) as u64;
+
+            let end_frame =
+                (end * self.sample_rate as f64) as u64;
+
+            let start_frame = start_frame.min(s.total_frames);
+            let end_frame = end_frame.min(s.total_frames);
+
+            if end_frame > start_frame {
+                converted.push((start_frame, end_frame));
+            }
+        }
+
+        s.skip_ranges = converted;
+        s.generation += 1;
+        s.loading = false;
     }
 }
 

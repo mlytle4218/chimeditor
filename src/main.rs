@@ -5,6 +5,7 @@ mod timeline;
 
 use audio::AudioEngine;
 use video::probe_video;
+use timeline::load_skip_list;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -33,9 +34,13 @@ impl Drop for TerminalGuard {
 
 fn main() -> Result<(), Box<dyn Error>> {
 
-    let filename = std::env::args()
-        .nth(1)
+    let mut args = std::env::args().skip(1);
+
+    let filename = args
+        .next()
         .unwrap_or_else(|| "input.mp4".to_string());
+
+    let skip_filename = args.next();
 
     println!("================================");
     println!("       CHIMEDITOR");
@@ -55,6 +60,31 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Initialize audio engine.
     let engine = AudioEngine::new(&filename)?;
+
+    // Load optional skip-list file.
+    if let Some(skip_file) = skip_filename {
+
+        let ranges = load_skip_list(&skip_file)?;
+
+        let engine_ranges: Vec<(f64, f64)> = ranges
+            .iter()
+            .map(|r| (r.start, r.end))
+            .collect();
+
+        engine.set_skip_ranges(&engine_ranges);
+
+        println!("\nLoaded skip list: {}", skip_file);
+
+        for range in &ranges {
+            println!(
+                "Skip {:.2}s -> {:.2}s",
+                range.start,
+                range.end
+            );
+        }
+
+        println!("Total skip sections: {}", ranges.len());
+    }
 
     println!("Audio duration: {:.2}s", engine.duration());
 

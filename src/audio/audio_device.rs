@@ -40,6 +40,37 @@ pub fn create_audio_stream(
             let total_frames = s.total_frames as f64;
 
             for frame in output.chunks_mut(channels) {
+                // Check whether the playhead has entered a skip section.
+                let skip_target = if speed >= 0.0 {
+
+                    s.skip_ranges.iter()
+                        .find(|&&(start, end)| {
+                            position >= start as f64 &&
+                            position < end as f64
+                        })
+                        .map(|&(_, end)| end)
+
+                } else {
+
+                    s.skip_ranges.iter()
+                        .find(|&&(start, end)| {
+                            position > start as f64 &&
+                            position <= end as f64
+                        })
+                        .map(|&(start, _)| start)
+                };
+
+                if let Some(target) = skip_target {
+
+                    position = target as f64;
+
+                    // Force the disk cache reader to load the new position.
+                    s.generation += 1;
+                    s.loading = false;
+
+                    frame.fill(0.0);
+                    continue;
+                }
 
                 if !playing {
                     frame.fill(0.0);
