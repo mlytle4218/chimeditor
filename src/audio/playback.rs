@@ -255,6 +255,7 @@ impl AudioEngine {
         })
     }
 
+    #[allow(dead_code)]
     pub fn play(&self) {
 
         let mut s = self.state.lock().unwrap();
@@ -267,29 +268,84 @@ impl AudioEngine {
         s.playing = true;
     }
 
+    pub fn resume(&self) {
+
+        let mut s = self.state.lock().unwrap();
+
+        if s.position >= s.total_frames as f64 {
+            s.position = 0.0;
+        }
+
+        if s.speed == 0.0 {
+            s.speed = 1.0;
+        }
+
+        s.playing = true;
+    }
+
+    pub fn normal_speed(&self) {
+
+        let mut s = self.state.lock().unwrap();
+
+        if s.position >= s.total_frames as f64 {
+            s.position = 0.0;
+        }
+
+        s.speed = 1.0;
+    }
+
     pub fn pause(&self) {
 
         self.state.lock().unwrap().playing = false;
     }
 
-    pub fn fast_forward(&self) {
+    pub fn set_speed(&self, speed: f64) {
 
         let mut s = self.state.lock().unwrap();
 
-        s.speed = 2.0;
+        if speed < 0.0 && s.position <= 0.0 {
+            s.position = s.total_frames.saturating_sub(1) as f64;
+        } else if speed > 0.0 && s.position >= s.total_frames as f64 {
+            s.position = 0.0;
+        }
+
+        s.speed = speed;
         s.playing = true;
     }
 
-    pub fn reverse(&self) {
+    pub fn change_speed(&self, delta: f64) -> f64 {
 
         let mut s = self.state.lock().unwrap();
 
-        if s.position <= 0.0 {
-            s.position = s.total_frames.saturating_sub(1) as f64;
+        let base_speed = if s.speed <= 0.0 {
+            1.0
+        } else {
+            s.speed
+        };
+
+        let mut new_speed = (base_speed + delta).max(0.25);
+        new_speed = (new_speed * 100.0).round() / 100.0;
+
+        if new_speed > 0.0 && s.position >= s.total_frames as f64 {
+            s.position = 0.0;
         }
 
-        s.speed = -1.0;
+        s.speed = new_speed;
         s.playing = true;
+
+        new_speed
+    }
+
+    #[allow(dead_code)]
+    pub fn fast_forward(&self) {
+
+        self.set_speed(2.0);
+    }
+
+    #[allow(dead_code)]
+    pub fn reverse(&self) {
+
+        self.set_speed(-1.0);
     }
 
     pub fn seek(&self, seconds: f64) {

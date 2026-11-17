@@ -1,0 +1,73 @@
+# ChimEditor Keyboard Controls Configuration
+# Maps keyboard inputs to playback and editor controls.
+
+# Key names:
+#   - Single characters: "space", "z", "f", "r", "p", "q", etc.
+#   - Special keys: "left", "right", "up", "down", "home", "end", "esc" (or "escape")
+
+keybindings:
+  # Play / Pause toggle
+  play_pause:
+    - "space"
+
+  # Reset playback speed back to normal (1.0x)
+  normal_speed:
+    - "z"
+    - "Z"
+
+  # Increase playback speed by speed_step (0.5x)
+  speed_up:
+    - "up"
+
+  # Decrease playback speed by speed_step (0.5x)
+  speed_down:
+    - "down"
+
+  # Fast forward playback (2x)
+  fast_forward:
+    - "f"
+    - "F"
+
+  # Reverse playback (-1x)
+  reverse:
+    - "r"
+    - "R"
+
+  # Seek backward by seek_step_seconds
+  seek_backward:
+    - "left"
+
+  # Seek forward by seek_step_seconds
+  seek_forward:
+    - "right"
+
+  # Jump to beginning (0.0s)
+  seek_beginning:
+    - "home"
+
+  # Jump to the end of audio and pause
+  seek_end:
+    - "end"
+
+  # Display current playhead position and duration
+  display_position:
+    - "p"
+    - "P"
+
+  # Quit the application
+  quit:
+    - "q"
+    - "Q"
+    - "esc"
+
+# Playback and navigation settings
+settings:
+  # Speed increment when speed_up / speed_down is pressed
+  speed_step: 0.5
+
+  # Seconds to seek on seek_backward / seek_forward
+  seek_step_seconds: 5.0
+
+  # Playback rate multipliers
+  fast_forward_speed: 2.0
+  reverse_speed: -1.0

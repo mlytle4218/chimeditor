@@ -1,0 +1,33 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Media files (video & audio)
+*.mp4
+*.webm
+*.mkv
+*.avi
+*.mov
+*.m4v
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.opus
+*.m4a
+
+# Temporary audio PCM cache files
+*.pcm
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS artifacts
+.DS_Store
+Thumbs.db

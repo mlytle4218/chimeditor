@@ -1,14 +1,15 @@
-
 mod audio;
 mod video;
 mod timeline;
+mod config;
 
 use audio::AudioEngine;
 use video::probe_video;
 use timeline::load_skip_list;
+use config::{Action, Config};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{self, Event, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 
@@ -41,6 +42,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_else(|| "input.mp4".to_string());
 
     let skip_filename = args.next();
+
+    // Load configuration from config.yaml or fall back to defaults.
+    let config = Config::load_from_file("config.yaml");
 
     println!("================================");
     println!("       CHIMEDITOR");
@@ -88,17 +92,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Audio duration: {:.2}s", engine.duration());
 
-    println!("\nKEYBOARD CONTROLS");
-    println!("-----------------");
-    println!("SPACE  Play / Pause");
-    println!("F      Fast forward 2x");
-    println!("R      Reverse");
-    println!("LEFT   Seek backward 5 seconds");
-    println!("RIGHT  Seek forward 5 seconds");
-    println!("HOME   Go to beginning");
-    println!("END    Go to end");
-    println!("P      Display position");
-    println!("Q      Quit");
+    // Print active keyboard controls from config.
+    config.print_controls();
 
     println!("\nReady. Press a key...");
 
@@ -116,106 +111,131 @@ fn main() -> Result<(), Box<dyn Error>> {
                     continue;
                 }
 
-                match key.code {
+                if let Some(&action) = config.keybindings.get(&key.code) {
+                    match action {
 
-                    // PLAY / PAUSE
-                    KeyCode::Char(' ') => {
+                        // PLAY / PAUSE
+                        Action::PlayPause => {
 
-                        let playing = {
-                            let state = engine.state.lock().unwrap();
-                            state.playing
-                        };
+                            let playing = {
+                                let state = engine.state.lock().unwrap();
+                                state.playing
+                            };
 
-                        if playing {
+                            if playing {
+                                engine.pause();
+                                println!("\nPaused");
+                            } else {
+                                engine.resume();
+                                println!("\nPlaying");
+                            }
+                        }
+
+                        // NORMAL SPEED
+                        Action::NormalSpeed => {
+
+                            engine.normal_speed();
+
+                            println!("\nNormal speed (1.0x)");
+                        }
+
+                        // SPEED UP
+                        Action::SpeedUp => {
+
+                            let new_speed = engine.change_speed(config.settings.speed_step);
+
+                            println!("\nSpeed: {:.1}x", new_speed);
+                        }
+
+                        // SPEED DOWN
+                        Action::SpeedDown => {
+
+                            let new_speed = engine.change_speed(-config.settings.speed_step);
+
+                            println!("\nSpeed: {:.1}x", new_speed);
+                        }
+
+                        // FAST FORWARD
+                        Action::FastForward => {
+
+                            engine.set_speed(config.settings.fast_forward_speed);
+
+                            println!(
+                                "\nFast forward {:.1}x",
+                                config.settings.fast_forward_speed
+                            );
+                        }
+
+                        // REVERSE
+                        Action::Reverse => {
+
+                            engine.set_speed(config.settings.reverse_speed);
+
+                            println!(
+                                "\nReverse playback ({:.1}x)",
+                                config.settings.reverse_speed
+                            );
+                        }
+
+                        // SEEK BACKWARD
+                        Action::SeekBackward => {
+
+                            let position =
+                                (engine.position() - config.settings.seek_step_seconds).max(0.0);
+
+                            engine.seek(position);
+
+                            println!("\nPosition: {:.2}s", position);
+                        }
+
+                        // SEEK FORWARD
+                        Action::SeekForward => {
+
+                            let position =
+                                (engine.position() + config.settings.seek_step_seconds)
+                                    .min(engine.duration());
+
+                            engine.seek(position);
+
+                            println!("\nPosition: {:.2}s", position);
+                        }
+
+                        // BEGINNING
+                        Action::SeekBeginning => {
+
+                            engine.seek(0.0);
+
+                            println!("\nBeginning");
+                        }
+
+                        // END
+                        Action::SeekEnd => {
+
+                            let duration = engine.duration();
+
+                            engine.seek(duration);
+
                             engine.pause();
-                            println!("\nPaused");
-                        } else {
-                            engine.play();
-                            println!("\nPlaying");
+
+                            println!("\nEnd of audio");
+                        }
+
+                        // DISPLAY POSITION
+                        Action::DisplayPosition => {
+
+                            println!(
+                                "\nPosition: {:.3}s / {:.3}s",
+                                engine.position(),
+                                engine.duration()
+                            );
+                        }
+
+                        // QUIT
+                        Action::Quit => {
+
+                            break;
                         }
                     }
-
-                    // FAST FORWARD
-                    KeyCode::Char('f') |
-                    KeyCode::Char('F') => {
-
-                        engine.fast_forward();
-
-                        println!("\nFast forward 2x");
-                    }
-
-                    // REVERSE
-                    KeyCode::Char('r') |
-                    KeyCode::Char('R') => {
-
-                        engine.reverse();
-
-                        println!("\nReverse playback");
-                    }
-
-                    // SEEK BACKWARD
-                    KeyCode::Left => {
-
-                        let position =
-                            (engine.position() - 5.0).max(0.0);
-
-                        engine.seek(position);
-
-                        println!("\nPosition: {:.2}s", position);
-                    }
-
-                    // SEEK FORWARD
-                    KeyCode::Right => {
-
-                        let position =
-                            (engine.position() + 5.0)
-                                .min(engine.duration());
-
-                        engine.seek(position);
-
-                        println!("\nPosition: {:.2}s", position);
-                    }
-
-                    // BEGINNING
-                    KeyCode::Home => {
-
-                        engine.seek(0.0);
-
-                        println!("\nBeginning");
-                    }
-
-                    // END
-                    KeyCode::End => {
-
-                        let duration = engine.duration();
-
-                        engine.seek(duration);
-
-                        engine.pause();
-
-                        println!("\nEnd of audio");
-                    }
-
-                    // DISPLAY POSITION
-                    KeyCode::Char('p') |
-                    KeyCode::Char('P') => {
-
-                        println!(
-                            "\nPosition: {:.3}s / {:.3}s",
-                            engine.position(),
-                            engine.duration()
-                        );
-                    }
-
-                    // QUIT
-                    KeyCode::Char('q') |
-                    KeyCode::Char('Q') |
-                    KeyCode::Esc => {
-
-                        break;
-                    }
-
-                    _ => {}
                 }
             }
         }
