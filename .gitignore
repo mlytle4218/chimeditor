@@ -18,8 +18,14 @@
 *.opus
 *.m4a
 
+# ChimEditor project files
+*.cme
+
 # Temporary audio PCM cache files
 *.pcm
+
+# Log files
+*.log
 
 # IDE & Editor files
 .vscode/

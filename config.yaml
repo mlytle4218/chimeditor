@@ -54,6 +54,61 @@ keybindings:
     - "p"
     - "P"
 
+  # Display current playhead position in words (hours, minutes, seconds)
+  display_timestamp_words:
+    - "w"
+    - "W"
+
+  # Mark beginning of a skip section
+  mark_skip_start:
+    - "b"
+
+  # Skip from the beginning of the file to the current point
+  skip_from_beginning:
+    - "B"
+
+  # Mark end of a skip section
+  mark_skip_end:
+    - "e"
+
+  # Skip from the current point to the end of the file
+  skip_to_end:
+    - "E"
+
+  # Toggle editing mode (audible tones at skip boundaries instead of skipping)
+  toggle_editing_mode:
+    - "A"
+
+  # Delete skip under playhead (when in editing mode)
+  delete_skip:
+    - "d"
+    - "D"
+
+  # Jump to 2 seconds before next skip (cycle through skips)
+  cycle_skips:
+    - "C"
+
+  # Nudge beginning of current edit 0.25s earlier (when in editing mode)
+  nudge_start_earlier:
+    - "n"
+
+  # Nudge beginning of current edit 0.25s later (when in editing mode)
+  nudge_start_later:
+    - "m"
+
+  # Nudge end of current edit 0.25s earlier (when in editing mode)
+  nudge_end_earlier:
+    - "N"
+
+  # Nudge end of current edit 0.25s later (when in editing mode)
+  nudge_end_later:
+    - "M"
+
+  # Export non-skipped audio/video with FFmpeg
+  export:
+    - "o"
+    - "O"
+
   # Quit the application
   quit:
     - "q"
@@ -62,6 +117,9 @@ keybindings:
 
 # Playback and navigation settings
 settings:
+  # Output file format/extension for exported media (always outputs to mp4 by default)
+  output_format: "mp4"
+
   # Speed increment when speed_up / speed_down is pressed
   speed_step: 0.5
 

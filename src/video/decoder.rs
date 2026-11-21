@@ -1,4 +1,3 @@
-
 use std::process::Command;
 
 #[derive(Debug)]
@@ -61,4 +60,22 @@ pub fn probe_video(
         height,
         duration,
     })
+}
+
+pub fn probe_media_details(filename: &str) -> String {
+    let output = Command::new("ffprobe")
+        .args(["-hide_banner", filename])
+        .output();
+
+    match output {
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            if !stderr.trim().is_empty() {
+                stderr.trim().to_string()
+            } else {
+                String::from_utf8_lossy(&out.stdout).trim().to_string()
+            }
+        }
+        Err(err) => format!("Could not run ffprobe on '{}': {}", filename, err),
+    }
 }

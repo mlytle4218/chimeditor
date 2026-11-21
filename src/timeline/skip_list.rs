@@ -1,10 +1,58 @@
 use std::error::Error;
 use std::fs;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SkipRange {
     pub start: f64,
     pub end: f64,
+}
+
+pub fn format_timestamp(seconds: f64) -> String {
+    let total_secs = seconds.max(0.0) as u64;
+    let hours = total_secs / 3600;
+    let minutes = (total_secs % 3600) / 60;
+    let secs = total_secs % 60;
+    format!("{:02}:{:02}:{:02}", hours, minutes, secs)
+}
+
+pub fn merge_skip_ranges(mut ranges: Vec<SkipRange>) -> Vec<SkipRange> {
+    ranges.retain(|r| r.end > r.start);
+    ranges.sort_by(|a, b| a.start.total_cmp(&b.start));
+
+    let mut merged: Vec<SkipRange> = Vec::new();
+    for range in ranges {
+        if let Some(last) = merged.last_mut() {
+            if range.start <= last.end {
+                last.end = last.end.max(range.end);
+                continue;
+            }
+        }
+        merged.push(range);
+    }
+    merged
+}
+
+pub fn format_skip_list(ranges: &[SkipRange]) -> String {
+    let merged = merge_skip_ranges(ranges.to_vec());
+    let mut out = String::from("# ChimEditor skip list\n# Format: start_time,end_time\n\n");
+    for range in &merged {
+        out.push_str(&format!(
+            "{},{}\n",
+            format_timestamp(range.start),
+            format_timestamp(range.end)
+        ));
+    }
+    out
+}
+
+#[allow(dead_code)]
+pub fn save_skip_list(
+    filename: &str,
+    ranges: &[SkipRange],
+) -> Result<(), Box<dyn Error>> {
+    let content = format_skip_list(ranges);
+    fs::write(filename, content)?;
+    Ok(())
 }
 
 pub fn parse_timestamp(value: &str) -> Result<f64, Box<dyn Error>> {
@@ -35,16 +83,10 @@ pub fn parse_timestamp(value: &str) -> Result<f64, Box<dyn Error>> {
     Ok(seconds)
 }
 
-pub fn load_skip_list(
-    filename: &str,
-) -> Result<Vec<SkipRange>, Box<dyn Error>> {
-
-    let contents = fs::read_to_string(filename)?;
-
+pub fn parse_skip_list_str(contents: &str) -> Result<Vec<SkipRange>, Box<dyn Error>> {
     let mut ranges = Vec::new();
 
     for (line_number, line) in contents.lines().enumerate() {
-
         let line = line.trim();
 
         if line.is_empty() || line.starts_with('#') {
@@ -74,26 +116,50 @@ pub fn load_skip_list(
         ranges.push(SkipRange { start, end });
     }
 
-    // Sort by starting timestamp.
-    ranges.sort_by(|a, b| {
-        a.start.total_cmp(&b.start)
-    });
+    Ok(merge_skip_ranges(ranges))
+}
 
-    // Merge overlapping or adjacent sections.
-    let mut merged: Vec<SkipRange> = Vec::new();
+#[allow(dead_code)]
+pub fn load_skip_list(
+    filename: &str,
+) -> Result<Vec<SkipRange>, Box<dyn Error>> {
+    let contents = fs::read_to_string(filename)?;
+    parse_skip_list_str(&contents)
+}
 
-    for range in ranges {
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        if let Some(last) = merged.last_mut() {
-
-            if range.start <= last.end {
-                last.end = last.end.max(range.end);
-                continue;
-            }
-        }
-
-        merged.push(range);
+    #[test]
+    fn test_merge_skip_ranges() {
+        let input = vec![
+            SkipRange { start: 10.0, end: 20.0 },
+            SkipRange { start: 15.0, end: 25.0 },
+            SkipRange { start: 30.0, end: 40.0 },
+            SkipRange { start: 5.0, end: 8.0 },
+        ];
+        let merged = merge_skip_ranges(input);
+        assert_eq!(
+            merged,
+            vec![
+                SkipRange { start: 5.0, end: 8.0 },
+                SkipRange { start: 10.0, end: 25.0 },
+                SkipRange { start: 30.0, end: 40.0 },
+            ]
+        );
     }
 
-    Ok(merged)
+    #[test]
+    fn test_save_and_load_skip_list() {
+        let temp_file = "test_skips_roundtrip.txt";
+        let original = vec![
+            SkipRange { start: 10.0, end: 20.0 },
+            SkipRange { start: 75.0, end: 105.0 },
+        ];
+        save_skip_list(temp_file, &original).unwrap();
+        let loaded = load_skip_list(temp_file).unwrap();
+        assert_eq!(loaded, original);
+        let _ = fs::remove_file(temp_file);
+    }
 }

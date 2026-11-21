@@ -1,4 +1,5 @@
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Playhead {
     pub position: f64,
@@ -7,6 +8,7 @@ pub struct Playhead {
     pub playing: bool,
 }
 
+#[allow(dead_code)]
 impl Playhead {
 
     pub fn new(duration: f64) -> Self {

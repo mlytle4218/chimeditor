@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
+use crate::logger;
+
 pub fn decode_to_disk(
     filename: &str,
     cache_path: &str,
@@ -10,7 +12,11 @@ pub fn decode_to_disk(
     channels: usize,
 ) -> Result<u64, Box<dyn Error>> {
 
-    println!("FFmpeg: decoding audio...");
+    logger::log(&format!("FFmpeg: decoding audio from '{}'...", filename));
+    logger::log(&format!(
+        "FFmpeg target format: sample_rate={} Hz, channels={}",
+        sample_rate, channels
+    ));
 
     let rate = sample_rate.to_string();
     let channel_count = channels.to_string();
@@ -29,7 +35,7 @@ pub fn decode_to_disk(
             "pipe:1",
         ])
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::piped())
         .spawn()?;
 
     let mut stdout = child.stdout.take().unwrap();
@@ -51,6 +57,14 @@ pub fn decode_to_disk(
 
     let status = child.wait()?;
 
+    if let Some(mut err_pipe) = child.stderr.take() {
+        let mut err_str = String::new();
+        let _ = err_pipe.read_to_string(&mut err_str);
+        if !err_str.trim().is_empty() {
+            logger::log(&format!("FFmpeg stderr:\n{}", err_str.trim()));
+        }
+    }
+
     if !status.success() {
         return Err("FFmpeg decoding failed".into());
     }
@@ -65,10 +79,12 @@ pub fn decode_to_disk(
 
     let total_frames = file_size / bytes_per_frame;
 
-    println!(
-        "Decoded {:.2} seconds",
-        total_frames as f64 / sample_rate as f64
-    );
+    logger::log(&format!(
+        "FFmpeg decoded {:.2} seconds ({} frames, {} bytes)",
+        total_frames as f64 / sample_rate as f64,
+        total_frames,
+        file_size
+    ));
 
     Ok(total_frames)
 }

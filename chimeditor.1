@@ -1,0 +1,379 @@
+.TH CHIMEDITOR 1 "November 2026" "ChimEditor 0.1.0" "User Commands"
+.SH NAME
+chimeditor \- terminal-based non-linear video/audio editor and skip-cutter
+.SH SYNOPSIS
+.B chimeditor
+[\fIFILE\fR]
+.SH DESCRIPTION
+.B chimeditor
+is a lightweight, terminal-based non-linear audio and video editor designed for
+rapid review, trimming, and cutting of media files using intuitive keyboard controls.
+.PP
+ChimEditor provides real-time multi-speed playback (including reverse scrubbing),
+dynamic playhead navigation, and instant skip-list creation. Skip sections are
+automatically bypassed during playback and seeking. When exporting, ChimEditor
+invokes FFmpeg with an optimized single-pass frame-selection filter graph to output
+a synchronized file containing only the non-skipped media.
+.PP
+ChimEditor operates directly in the terminal using raw console mode with zero
+external GUI dependencies.
+.SH PROJECT FILES (.cme)
+ChimEditor uses self-contained project archives with the
+.B .cme
+extension. A
+.B .cme
+file is a standard ZIP archive stored without re-compression (\fB-0\fR store mode)
+that bundles:
+.IP 1. 4
+The original, unmodified source media file.
+.IP 2. 4
+A \fBskips.txt\fR metadata file recording all marked skip intervals.
+.PP
+.SS Creating a Project
+When
+.B chimeditor
+is invoked with a media file (for example, \fImovie.mp4\fR or \fIclip.webm\fR):
+.PP
+.RS
+.B chimeditor
+\fImovie.mp4\fR
+.RE
+.PP
+ChimEditor automatically packages the media file and an initial blank
+\fBskips.txt\fR into \fImovie.cme\fR. The media opens immediately for editing.
+All subsequent skip marks created during the session are written directly into
+the \fImovie.cme\fR project file.
+.PP
+.SS Reopening an Existing Project
+When
+.B chimeditor
+is invoked with a \fB.cme\fR project file:
+.PP
+.RS
+.B chimeditor
+\fImovie.cme\fR
+.RE
+.PP
+ChimEditor opens the project archive, restores all previously saved skip ranges,
+and extracts the packaged media to temporary storage for playback and export.
+When ChimEditor exits, temporary extraction files are automatically deleted.
+.SH KEYBOARD CONTROLS
+ChimEditor is entirely keyboard-driven. Keybindings can be customized in
+\fBconfig.yaml\fR.
+.SS Playback and Speed Controls
+.TP
+.B Space
+Toggle playback between play and pause.
+.TP
+.BR z ", " Z
+Reset playback speed back to normal (1.0x).
+.TP
+.B Up Arrow
+Increase playback speed by \fBspeed_step\fR (default: +0.5x).
+.TP
+.B Down Arrow
+Decrease playback speed by \fBspeed_step\fR (default: -0.5x).
+.TP
+.BR f ", " F
+Fast forward playback at \fBfast_forward_speed\fR (default: 2.0x).
+.TP
+.BR r ", " R
+Reverse playback scrubbing at \fBreverse_speed\fR (default: -1.0x).
+.SS Navigation and Playhead
+.TP
+.B Left Arrow
+Seek backward by \fBseek_step_seconds\fR (default: 5.0 seconds).
+Existing skip sections are bypassed seamlessly without consuming seek distance.
+.TP
+.B Right Arrow
+Seek forward by \fBseek_step_seconds\fR (default: 5.0 seconds).
+Existing skip sections are bypassed seamlessly.
+.TP
+.B Home
+Jump immediately to the beginning of the file (00:00:00).
+.TP
+.B End
+Jump immediately to the end of the file and pause playback.
+.TP
+.BR p ", " P
+Display the current playhead timestamp and total duration in the top-left status
+line in \fBHH:MM:SS / HH:MM:SS\fR format.
+.TP
+.BR w ", " W
+Display the current playhead timestamp in words on the top-left status line (e.g.
+\fB15 minutes 32 seconds\fR or \fB1 hour 15 minutes 32 seconds\fR). Hours are
+omitted when the current timestamp is less than one hour.
+.SS Skip Marking and Cutting
+.TP
+.B b
+Mark the start of a skip interval at the current playhead position. The timestamp
+is displayed at the top-left corner of the screen.
+.TP
+.B e
+Mark the end of a skip interval at the current playhead position. Pairs with the
+preceding \fBb\fR mark, automatically orders timestamps, merges any overlapping
+or adjacent skip ranges, updates the real-time audio playback engine, and persists
+the change to the \fB.cme\fR project file. The resulting interval
+(\fBHH:MM:SS -> HH:MM:SS\fR) is displayed on the status line.
+.TP
+.B B \fR(Shift+B)\fP
+Cut from beginning: immediately creates a skip interval from the start of the
+file (\fB00:00:00\fR) to the current playhead position. Automatically merges with
+existing skips, updates playback, and saves to the project file. Useful for trimming
+intros or pre-roll banter with a single keystroke.
+.TP
+.B E \fR(Shift+E)\fP
+Cut to end: immediately creates a skip interval from the current playhead position
+to the end of the file (\fBduration\fR). Automatically merges with existing skips,
+updates playback, and saves to the project file. Useful for trimming outros or
+post-show commentary with a single keystroke.
+.TP
+.B A \fR(Shift+A)\fP
+Toggle editing mode. When editing mode is active, ChimEditor does not jump over
+or bypass skip intervals during playback. Instead, it plays through the entire
+timeline continuously, sounding a synthesized ascending chime (400 Hz to 850 Hz)
+at the beginning of each skip interval and a descending chime (850 Hz to 400 Hz)
+at the end of each skip interval. This allows precise auditory verification of cut
+points. Pressing \fBA\fR again disables editing mode and restores normal skipping.
+.TP
+.BR d ", " D
+Delete skip under playhead. When editing mode is active and the playhead is inside a
+skip interval, pressing \fBd\fR immediately removes that skip interval, updates the
+playback engine, and persists the change to the \fB.cme\fR project file. If ChimEditor
+is not in editing mode or the playhead is not within a skip, a status message is
+displayed and no change is made.
+.TP
+.B n
+Nudge beginning of current edit 0.25 seconds earlier (when in editing mode).
+Moves the start boundary of the current skip interval 0.25 seconds earlier
+and automatically seeks playback to 2 seconds before the new start boundary
+(\fB00:00:00\fR if within 2 seconds of the beginning) so the editor can immediately
+audition the revised cut point.
+.TP
+.B m
+Nudge beginning of current edit 0.25 seconds later (when in editing mode).
+Moves the start boundary of the current skip interval 0.25 seconds later
+and automatically seeks playback to 2 seconds before the new start boundary.
+.TP
+.B N \fR(Shift+N)\fP
+Nudge end of current edit 0.25 seconds earlier (when in editing mode).
+Moves the end boundary of the current skip interval 0.25 seconds earlier
+and automatically seeks playback to 2 seconds before the new end boundary
+(\fB00:00:00\fR if within 2 seconds of the beginning) so the editor can immediately
+audition the revised end cut point with the descending boundary chime.
+.TP
+.B M \fR(Shift+M)\fP
+Nudge end of current edit 0.25 seconds later (when in editing mode).
+Moves the end boundary of the current skip interval 0.25 seconds later
+and automatically seeks playback to 2 seconds before the new end boundary.
+.TP
+.B C \fR(Shift+C)\fP
+Cycle through skip sections: jumps the playhead to 2 seconds before the first skip section.
+If the first skip starts at or within 2 seconds of the beginning of the file, jumps to the 0 play position (00:00:00).
+Each subsequent press of \fBC\fR advances the playhead to 2 seconds before the next skip section.
+If the current skip is the last one, pressing \fBC\fR cycles back to the first skip section.
+.SS Export and Termination
+.TP
+.BR o ", " O
+Export non-skipped media using FFmpeg. Pauses playback, silences the audio device,
+and generates an edited media file in the project directory
+(\fI<basename>-edited.<output_format>\fR for video outputs, or
+\fI<basename>.<output_format>\fR without \fB-edited\fR for audio outputs). Displays
+real-time export status on the screen and quits upon completion.
+.TP
+.BR q ", " Q ", " Esc
+Save all skip ranges to the project file and quit ChimEditor.
+.TP
+.B Ctrl+C
+Force quit the application.
+.SH STATUS DISPLAY
+ChimEditor reserves the top row (row 0, column 0) of the terminal screen for
+live feedback:
+.IP \(bu 2
+Pressing \fBb\fR displays the marked start position (e.g. \fB00:01:15\fR).
+.IP \(bu 2
+Pressing \fBe\fR, \fBB\fR, or \fBE\fR displays the created skip interval
+(e.g. \fB00:01:15 -> 00:02:40\fR or \fB00:00:00 -> 00:00:45\fR).
+.IP \(bu 2
+Pressing \fBA\fR displays \fBEditing mode: ON\fR or \fBEditing mode: OFF\fR.
+.IP \(bu 2
+Pressing \fBd\fR displays the deleted skip interval (e.g. \fBDeleted: 00:01:15 -> 00:02:40\fR),
+\fBNot in edit mode\fR, or \fBNot inside a skip\fR.
+.IP \(bu 2
+Pressing \fBn\fR, \fBm\fR, \fBN\fR, or \fBM\fR displays the revised skip interval
+(e.g. \fB00:01:14 -> 00:02:40\fR).
+.IP \(bu 2
+Pressing \fBC\fR displays skip cycle status (e.g. \fBSkip 1/3: 00:00:08\fR) or \fBNo skips\fR if no skips are defined.
+.IP \(bu 2
+Pressing \fBp\fR displays current playhead progress
+(e.g. \fB00:03:12 / 00:45:00\fR).
+.IP \(bu 2
+Pressing \fBw\fR displays current playhead timestamp in words
+(e.g. \fB15 minutes 32 seconds\fR or \fB1 hour 15 minutes 32 seconds\fR).
+.IP \(bu 2
+Pressing \fBo\fR displays export status: \fBExporting <file>...\fR, followed by
+\fBSaved <file>\fR upon success or \fBExport failed\fR if FFmpeg encounters an error.
+.SH CONFIGURATION
+ChimEditor loads configuration settings from \fB~/.config/shimeditor/config.yaml\fR
+(or \fBconfig.yaml\fR in the current working directory if present).
+If the configuration file does not exist, ChimEditor automatically creates
+\fB~/.config/shimeditor/config.yaml\fR seeded with the complete default configuration.
+.PP
+.SS Structure of config.yaml
+.nf
+# Keybindings map action names to lists of key identifiers
+keybindings:
+  play_pause:              ["space"]
+  normal_speed:            ["z", "Z"]
+  speed_up:                ["up"]
+  speed_down:              ["down"]
+  fast_forward:            ["f", "F"]
+  reverse:                 ["r", "R"]
+  seek_backward:           ["left"]
+  seek_forward:            ["right"]
+  seek_beginning:          ["home"]
+  seek_end:                ["end"]
+  display_position:        ["p", "P"]
+  display_timestamp_words: ["w", "W"]
+  mark_skip_start:         ["b"]
+  skip_from_beginning:     ["B"]
+  mark_skip_end:           ["e"]
+  skip_to_end:             ["E"]
+  toggle_editing_mode:     ["A"]
+  delete_skip:             ["d", "D"]
+  cycle_skips:             ["C"]
+  nudge_start_earlier:     ["n"]
+  nudge_start_later:       ["m"]
+  nudge_end_earlier:       ["N"]
+  nudge_end_later:         ["M"]
+  export:                  ["o", "O"]
+  quit:                    ["q", "Q", "esc"]
+
+# Operational settings
+settings:
+  # Container format for exported video/audio (default: "mp4")
+  output_format: "mp4"
+
+  # Speed step adjustment for Up/Down arrows
+  speed_step: 0.5
+
+  # Seek step in seconds for Left/Right arrows
+  seek_step_seconds: 5.0
+
+  # Fast forward multiplier
+  fast_forward_speed: 2.0
+
+  # Reverse playback multiplier
+  reverse_speed: -1.0
+
+  # Diagnostic log path
+  log_file: "chimeditor.log"
+.fi
+.PP
+.SS Supported Key Names
+Single character keys (\fB"space"\fR, \fB"z"\fR, \fB"b"\fR, \fB"B"\fR, etc.) and
+special named keys (\fB"left"\fR, \fB"right"\fR, \fB"up"\fR, \fB"down"\fR,
+\fB"home"\fR, \fB"end"\fR, \fB"esc"\fR, \fB"enter"\fR, \fB"tab"\fR,
+\fB"backspace"\fR, \fB"pageup"\fR, \fB"pagedown"\fR, and \fB"f1"\fR through \fB"f12"\fR).
+.SH EXPORT MECHANISM
+When the export command (\fBo\fR) is executed:
+.IP 1. 4
+Playback and audio output streams are paused to prevent ALSA/audio buffer underruns.
+.IP 2. 4
+Playable (non-skipped) time segments are calculated from the file duration and
+merged skip list.
+.IP 3. 4
+If the media contains video, an optimized single-pass FFmpeg \fBselect\fR and
+\fBaselect\fR filter graph is constructed:
+.RS
+.nf
+-vf "select='between(t,s1,e1)+between(t,s2,e2)...',setpts=N/FRAME_RATE/TB"
+-af "aselect='between(t,s1,e1)+between(t,s2,e2)...',asetpts=N/SR/TB"
+.fi
+.RE
+This single-pass design avoids multi-branch buffering, keeping memory consumption
+under 1 GB regardless of file length and avoiding out-of-memory errors on long 1080p/4K files.
+.IP 4. 4
+The resulting file is saved as \fI<basename>-edited.<output_format>\fR for video outputs (or \fI<basename>.<output_format>\fR without \fB-edited\fR for audio outputs) in the directory
+containing the project archive.
+.IP 5. 4
+The full FFmpeg command, stream parameters, and encoding progress are logged to
+\fBchimeditor.log\fR.
+.SH FILES
+.TP
+.B ~/.config/shimeditor/config.yaml
+User application configuration file for keybindings and playback settings.
+.TP
+.B ~/.config/shimeditor/chimeditor.log
+Diagnostic log recording FFprobe stream details, decoding metrics, FFmpeg export
+commands, and operational events.
+.TP
+.B skips.txt
+Plaintext skip list formatted as comma-separated timestamp pairs (packaged inside \fB.cme\fR):
+.RS
+.nf
+# ChimEditor skip list
+# Format: start_time,end_time
+
+00:00:00,00:00:30
+00:05:12,00:06:45
+00:15:00,00:15:30
+.fi
+.RE
+.TP
+.I <name>.cme
+ChimEditor project archive containing the source media and internal \fBskips.txt\fR.
+.SH EXAMPLES
+.PP
+.B Example 1: Start a new project from an MP4 video
+.RS
+.B chimeditor video.mp4
+.PP
+Creates \fIvideo.cme\fR containing \fIvideo.mp4\fR and a blank skip list. Opens the
+video for playback.
+.RE
+.PP
+.B Example 2: Resume editing an existing project
+.RS
+.B chimeditor video.cme
+.PP
+Opens \fIvideo.cme\fR, restoring all previously defined skip intervals and loading
+the packaged video stream.
+.RE
+.PP
+.B Example 3: Quick intro and outro cut
+.RS
+1. Start playback and press \fBSpace\fR or \fBR\fR/\fBF\fR to locate the end of the intro.
+.br
+2. Press \fBB\fR to mark everything from the beginning to the current point as skipped.
+.br
+3. Scrub near the end of the video to locate where the outro begins.
+.br
+4. Press \fBE\fR to mark everything from the current point to the end as skipped.
+.br
+5. Press \fBo\fR to render the trimmed video to \fIvideo-edited.mp4\fR.
+.RE
+.PP
+.B Example 4: Remove a segment in the middle
+.RS
+1. Position playhead where the unwanted section starts and press \fBb\fR.
+.br
+2. Position playhead where the unwanted section ends and press \fBe\fR.
+.br
+3. Playback immediately skips this range during playback and seeking.
+.br
+4. Press \fBq\fR to save the project and exit.
+.RE
+.SH ENVIRONMENT
+.TP
+.B PATH
+Must include standard command-line tools: \fBffmpeg\fR(1) and \fBffprobe\fR(1) for
+media decoding/export, and \fBzip\fR(1) / \fBunzip\fR(1) (or \fBpython3\fR(1)) for
+\fB.cme\fR archive management.
+.SH SEE ALSO
+.BR ffmpeg (1),
+.BR ffprobe (1),
+.BR zip (1),
+.BR unzip (1)
+.SH AUTHORS
+Written for the ChimEditor media project.
