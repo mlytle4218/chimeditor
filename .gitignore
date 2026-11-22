@@ -37,3 +37,7 @@
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Session notes & interaction history
+INTERACTIONS.md
+interactions.md
